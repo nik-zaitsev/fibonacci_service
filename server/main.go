@@ -2,20 +2,24 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
-	"fmt"
+	"log"
+	"net"
+	"net/http"
+	"strconv"
+	"sync"
+
 	"github.com/nik-zaitsev/fibonacci_service/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"log"
-	"net"
 )
 
 var InvalidParametersValues = errors.New("invalid parameters values")
 
 func Fibonacci(from uint64, to uint64) ([]uint64, error) {
-	if from < 1 || to < 1 || to <= from {
+	if from < 1 || to < 1 || to < from {
 		return nil, InvalidParametersValues
 	}
 
@@ -26,7 +30,6 @@ func Fibonacci(from uint64, to uint64) ([]uint64, error) {
 
 	var n2, n1 uint64 = 0, 1
 	for i := uint64(1); i < to; i++ {
-		fmt.Println(i, n1, n2)
 		n2, n1 = n1, n1+n2
 		if i >= from-1 {
 			res[i-from+1] = n1
@@ -50,17 +53,78 @@ func (s *Service) GetFibonacciSlice(ctx context.Context, values *pb.BorderValues
 	}
 }
 
+type HttpHandler struct {
+}
+
+func (h *HttpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
+	args := r.URL.Query()
+	argFrom, errArgFrom := strconv.ParseUint(args.Get("from"), 10, 64)
+	if errArgFrom != nil {
+		log.Printf("fail parsing FROM parameter to uint64: %v", errArgFrom)
+		rw.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	argTo, errArgTo := strconv.ParseUint(args.Get("to"), 10, 64)
+	if errArgTo != nil {
+		log.Printf("fail parsing TO parameter to uint64: %v", errArgTo)
+		rw.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if resSlice, err := Fibonacci(argFrom, argTo); err != nil {
+		log.Printf("bad arguments, %v", err)
+		rw.WriteHeader(http.StatusBadRequest)
+		return
+	} else {
+		resp := make(map[string][]uint64, 1)
+		resp["fibonacciSlice"] = resSlice
+		if jsonResp, err := json.Marshal(resp); err != nil {
+			if _, err := rw.Write([]byte(err.Error())); err != nil {
+				rw.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+		} else {
+			rw.Header().Set("Content-Type", "application/json; charset=utf-8")
+			rw.WriteHeader(http.StatusOK)
+			if _, err := rw.Write(jsonResp); err != nil {
+				rw.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+		}
+	}
+}
+
 func main() {
 	lsn, err := net.Listen("tcp", ":50051")
 	if err != nil {
 		log.Fatal(err)
 	}
+	rpcServer := grpc.NewServer()
+	pb.RegisterFibonacciServer(rpcServer, new(Service))
 
-	server := grpc.NewServer()
-	pb.RegisterFibonacciServer(server, new(Service))
+	wg := &sync.WaitGroup{}
+	log.Printf("starting gRPC server on %s", lsn.Addr().String())
+	wg.Add(1)
+	go func(wg *sync.WaitGroup) {
+		defer wg.Done()
+		if err := rpcServer.Serve(lsn); err != nil {
+			log.Fatal(err)
+		}
+	}(wg)
 
-	log.Printf("starting server on %s", lsn.Addr().String())
-	if err := server.Serve(lsn); err != nil {
-		log.Fatal(err)
+	httpHandler := &HttpHandler{}
+	httpServer := &http.Server{
+		Addr:    ":8080",
+		Handler: httpHandler,
 	}
+
+	log.Printf("starting HTTP server on %s", httpServer.Addr)
+	wg.Add(1)
+	go func(wg *sync.WaitGroup) {
+		defer wg.Done()
+		if err := httpServer.ListenAndServe(); err != nil {
+			log.Fatal(err)
+		}
+	}(wg)
+
+	wg.Wait()
 }
