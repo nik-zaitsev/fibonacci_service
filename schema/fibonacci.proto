@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+option go_package = "./pb";
+
+service Fibonacci {
+  rpc GetFibonacciSlice(BorderValues) returns (FibonacciSlice) {}
+}
+
+message BorderValues {
+  uint64 from = 1;
+  uint64 to = 2;
+}
+
+message FibonacciSlice {
+  repeated uint64 fibonacci_nums = 1;
+}
