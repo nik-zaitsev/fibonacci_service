@@ -43,12 +43,13 @@ type Service struct {
 	pb.UnimplementedFibonacciServer
 }
 
-func (s *Service) GetFibonacciSlice(ctx context.Context, values *pb.BorderValues) (*pb.FibonacciSlice, error) {
+func (s *Service) GetFibonacciSlice(_ context.Context, values *pb.BorderValues) (*pb.FibonacciSlice, error) {
 	log.Printf("new request received: From = %d, To = %d", values.From, values.To)
 	if resSlice, err := Fibonacci(values.From, values.To); err != nil {
 		log.Printf("bad arguments, skipping..")
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	} else {
+		log.Printf("sending back answer: %v", resSlice)
 		return &pb.FibonacciSlice{FibonacciNums: resSlice}, nil
 	}
 }
@@ -70,6 +71,7 @@ func (h *HttpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		rw.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	log.Printf("new request received: From = %d, To = %d", argFrom, argTo)
 	if resSlice, err := Fibonacci(argFrom, argTo); err != nil {
 		log.Printf("bad arguments, %v", err)
 		rw.WriteHeader(http.StatusBadRequest)
@@ -89,42 +91,46 @@ func (h *HttpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 				rw.WriteHeader(http.StatusInternalServerError)
 				return
 			}
+			log.Printf("sending back answer: %v", resp)
 		}
 	}
 }
 
-func main() {
+func RunGRPCServer(rpcServer *grpc.Server, wg *sync.WaitGroup) {
+	defer wg.Done()
 	lsn, err := net.Listen("tcp", ":50051")
 	if err != nil {
 		log.Fatal(err)
 	}
-	rpcServer := grpc.NewServer()
 	pb.RegisterFibonacciServer(rpcServer, new(Service))
-
-	wg := &sync.WaitGroup{}
 	log.Printf("starting gRPC server on %s", lsn.Addr().String())
+	if err := rpcServer.Serve(lsn); err != nil {
+		log.Printf("error while running gRPC server, %s", err.Error())
+	}
+}
+
+func RunHTTPServer(httpServer *http.Server, wg *sync.WaitGroup) {
+	defer wg.Done()
+	log.Printf("starting HTTP server on %s", httpServer.Addr)
+	if err := httpServer.ListenAndServe(); err != nil {
+		log.Printf("error while running HTTP server, %s", err.Error())
+	}
+}
+
+func main() {
+	wg := &sync.WaitGroup{}
+
+	rpcServer := grpc.NewServer()
 	wg.Add(1)
-	go func(wg *sync.WaitGroup) {
-		defer wg.Done()
-		if err := rpcServer.Serve(lsn); err != nil {
-			log.Fatal(err)
-		}
-	}(wg)
+	go RunGRPCServer(rpcServer, wg)
 
 	httpHandler := &HttpHandler{}
 	httpServer := &http.Server{
 		Addr:    ":8080",
 		Handler: httpHandler,
 	}
-
-	log.Printf("starting HTTP server on %s", httpServer.Addr)
 	wg.Add(1)
-	go func(wg *sync.WaitGroup) {
-		defer wg.Done()
-		if err := httpServer.ListenAndServe(); err != nil {
-			log.Fatal(err)
-		}
-	}(wg)
+	go RunHTTPServer(httpServer, wg)
 
 	wg.Wait()
 }
