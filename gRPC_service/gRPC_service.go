@@ -2,6 +2,7 @@ package gRPC_service
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
 	"sync"
@@ -34,9 +35,9 @@ func (s *Service) GetFibonacciSlice(ctx context.Context, values *pb.BorderValues
 	}
 }
 
-func RunGRPCServer(rpcServer *grpc.Server, wg *sync.WaitGroup) {
+func RunGRPCServer(rpcServer *grpc.Server, wg *sync.WaitGroup, port uint64) {
 	defer wg.Done()
-	lsn, err := net.Listen("tcp", ":50051")
+	lsn, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		log.Fatal(err)
 	}
