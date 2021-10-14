@@ -6,8 +6,9 @@ import (
 	"net"
 	"sync"
 
+	"github.com/nik-zaitsev/fibonacci_service/gRPC_service/pb"
+
 	"github.com/nik-zaitsev/fibonacci_service/fibonacci_calculator"
-	"github.com/nik-zaitsev/fibonacci_service/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
