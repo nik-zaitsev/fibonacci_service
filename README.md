@@ -9,7 +9,9 @@
 
     git clone https://github.com/nik-zaitsev/fibonacci_service.git
 
-2. Запустить
+2. Перейти в корневую директорию проекта и запустить
+
+    cd fibonacci_service
 
     go run .
 
