@@ -28,7 +28,7 @@ func (h *HttpHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("new request received: From = %d, To = %d", argFrom, argTo)
-	if resSlice, err := fibonacci_calculator.Fibonacci(argFrom, argTo); err != nil {
+	if resSlice, err := fibonacci_calculator.Fibonacci(argFrom, argTo, make(<-chan struct{})); err != nil {
 		log.Printf("bad arguments, %v", err)
 		rw.WriteHeader(http.StatusBadRequest)
 		return

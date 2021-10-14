@@ -18,11 +18,16 @@ type Service struct {
 	pb.UnimplementedFibonacciServer
 }
 
-func (s *Service) GetFibonacciSlice(_ context.Context, values *pb.BorderValues) (*pb.FibonacciSlice, error) {
+func (s *Service) GetFibonacciSlice(ctx context.Context, values *pb.BorderValues) (*pb.FibonacciSlice, error) {
 	log.Printf("new request received: From = %d, To = %d", values.From, values.To)
-	if resSlice, err := fibonacci_calculator.Fibonacci(values.From, values.To); err != nil {
-		log.Printf("bad arguments, skipping..")
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+	if resSlice, err := fibonacci_calculator.Fibonacci(values.From, values.To, ctx.Done()); err != nil {
+		if err == fibonacci_calculator.OperationRejected {
+			log.Printf("operation rejected from context")
+			return nil, status.Error(codes.Aborted, ctx.Err().Error())
+		} else {
+			log.Printf("bad arguments, skipping..")
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
 	} else {
 		log.Printf("sending back answer: %v", resSlice)
 		return &pb.FibonacciSlice{FibonacciNums: resSlice}, nil

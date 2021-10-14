@@ -27,7 +27,7 @@ func TestFibonacci(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("FROM=%d, TO=%d", tc.inputFrom, tc.inputTo), func(t *testing.T) {
-			res, err := Fibonacci(tc.inputFrom, tc.inputTo)
+			res, err := Fibonacci(tc.inputFrom, tc.inputTo, make(<-chan struct{}))
 			require.Equal(t, tc.expectedRes, res)
 			require.Equal(t, tc.expectedErr, err)
 		})
